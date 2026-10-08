@@ -9,10 +9,10 @@ function getProvider() {
       url: 'https://api.groq.com/openai/v1/chat/completions',
       key: process.env.GROQ_API_KEY,
       models: {
-        planner: process.env.PLANNER_MODEL || 'llama-3.1-8b-instant',
-        researcher: process.env.RESEARCHER_MODEL || 'llama-3.1-8b-instant',
-        writer: process.env.WRITER_MODEL || 'llama-3.3-70b-versatile',
-        critic: process.env.CRITIC_MODEL || 'llama-3.3-70b-versatile',
+        planner: process.env.PLANNER_MODEL || 'openai/gpt-oss-20b',
+        researcher: process.env.RESEARCHER_MODEL || 'openai/gpt-oss-20b',
+        writer: process.env.WRITER_MODEL || 'openai/gpt-oss-120b',
+        critic: process.env.CRITIC_MODEL || 'openai/gpt-oss-120b',
       },
     };
   }

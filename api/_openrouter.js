@@ -1,23 +1,52 @@
-// Shared OpenRouter helper for ProposalForge agent endpoints.
+// Shared LLM helper for ProposalForge agent endpoints.
+// Prefers Groq (free tier) when GROQ_API_KEY is set, falls back to OpenRouter.
 // Files prefixed with _ are not treated as serverless functions by Vercel.
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+function getProvider() {
+  if (process.env.GROQ_API_KEY) {
+    return {
+      name: 'groq',
+      url: 'https://api.groq.com/openai/v1/chat/completions',
+      key: process.env.GROQ_API_KEY,
+      models: {
+        planner: process.env.PLANNER_MODEL || 'llama-3.1-8b-instant',
+        researcher: process.env.RESEARCHER_MODEL || 'llama-3.1-8b-instant',
+        writer: process.env.WRITER_MODEL || 'llama-3.3-70b-versatile',
+        critic: process.env.CRITIC_MODEL || 'llama-3.3-70b-versatile',
+      },
+    };
+  }
+  return {
+    name: 'openrouter',
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    key: process.env.OPENROUTER_API_KEY,
+    models: {
+      planner: process.env.PLANNER_MODEL || 'anthropic/claude-haiku-4.5',
+      researcher: process.env.RESEARCHER_MODEL || 'anthropic/claude-haiku-4.5',
+      writer: process.env.WRITER_MODEL || 'anthropic/claude-sonnet-4.5',
+      critic: process.env.CRITIC_MODEL || 'anthropic/claude-sonnet-4.5',
+    },
+  };
+}
 
 export async function callModel(model, system, user) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    const err = new Error('OPENROUTER_API_KEY is not configured');
+  const provider = getProvider();
+  if (!provider.key) {
+    const err = new Error('No LLM API key configured');
     err.statusCode = 500;
     throw err;
   }
-  const res = await fetch(OPENROUTER_URL, {
+  const headers = {
+    'Authorization': `Bearer ${provider.key}`,
+    'Content-Type': 'application/json',
+  };
+  if (provider.name === 'openrouter') {
+    headers['HTTP-Referer'] = 'https://proposalforge-preview.vercel.app';
+    headers['X-Title'] = 'ProposalForge';
+  }
+  const res = await fetch(provider.url, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://proposalforge-preview.vercel.app',
-      'X-Title': 'ProposalForge',
-    },
+    headers,
     body: JSON.stringify({
       model,
       messages: [
@@ -41,12 +70,14 @@ export async function callModel(model, system, user) {
   return content.trim();
 }
 
-export const MODELS = {
-  planner: process.env.PLANNER_MODEL || 'anthropic/claude-haiku-4.5',
-  researcher: process.env.RESEARCHER_MODEL || 'anthropic/claude-haiku-4.5',
-  writer: process.env.WRITER_MODEL || 'anthropic/claude-sonnet-4.5',
-  critic: process.env.CRITIC_MODEL || 'anthropic/claude-sonnet-4.5',
-};
+export function getModels() {
+  return getProvider().models;
+}
+
+// Backwards-compatible export; resolved per-request via getModels().
+export const MODELS = new Proxy({}, {
+  get: (_, prop) => getModels()[prop],
+});
 
 export function readJsonBody(req) {
   return new Promise((resolve, reject) => {
